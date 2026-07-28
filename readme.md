@@ -1,76 +1,63 @@
-# Telco Customer Churn Analysis & Prediction
+# Telco Customer Churn Analysis & Retention Strategy
 
-## Executive Summary
-This project analyzes customer turnover (churn) for a telecommunications provider to identify the primary drivers of churn, build an initial baseline predictive model, and provide actionable business recommendations to improve customer retention. 
+## 1. Understanding of the Problem
+In subscription-based telecommunications, acquiring a new customer costs **5 to 25 times more** than retaining an existing one. Uncontrolled turnover (**churn**) directly erodes Monthly Recurring Revenue (MRR) and prevents the recovery of upfront Customer Acquisition Costs (CAC).
 
-All data cleaning, feature engineering, and modeling steps are fully automated in the accompanying Jupyter Notebook (`notebook.ipynb`) to ensure end-to-end reproducibility.
-
----
-
-## 1. Problem Understanding
-Customer acquisition costs in the telecommunications industry significantly exceed customer retention costs. When a customer churns, the company loses both immediate monthly recurring revenue (MRR) and the long-term customer lifetime value (LTV).
-
-The objective of this analysis is twofold:
-1. **Identify key risk factors** associated with customer departure (e.g., contract types, pricing, service usage).
-2. **Build a baseline predictive model** to flag high-risk customers before they churn, enabling targeted retention campaigns.
+The objective of this project is to analyze the Telco customer dataset to identify key behavioral and financial drivers of churn, build a simple and interpretable baseline predictive model to flag high-risk accounts, and deliver actionable recommendations to improve customer retention.
 
 ---
 
-## 2. Data Quality Issues Identified
-During the initial Data Understanding and Cleaning phase, the following key data quality issues were discovered and resolved programmatically:
+## 2. Important Data-Quality Issues Discovered
+During initial data profiling, the following core quality issues were identified and resolved programmatically:
 
-1. **Incorrect Data Type in `TotalCharges`**:
-   - *Issue*: `TotalCharges` was loaded as a string (`object`) rather than a numerical float.
-   - *Fix*: Converted using `pd.to_numeric(..., errors='coerce')`.
-2. **Missing / Space-Filled Values**:
-   - *Issue*: Exactly 11 rows in `TotalCharges` contained blank whitespace string values (`" "`).
-   - *Insight*: All 11 instances corresponded to new customers with `tenure == 0`.
-   - *Fix*: Imputed missing `TotalCharges` with `0.0` (or removed the 11 rows) to reflect zero prior billing history.
-3. **Redundant Identifiers**:
-   - *Issue*: `customerID` is an arbitrary string with zero predictive power.
-   - *Fix*: Dropped `customerID` prior to model input.
-4. **Categorical Redundancies**:
-   - *Issue*: Several columns contained redundant label descriptions like `"No internet service"` across multiple add-on features (`OnlineSecurity`, `TechSupport`, etc.).
-   - *Fix*: Standardized and encoded using One-Hot Encoding (`pd.get_dummies` / `OneHotEncoder`).
+* **Incorrect Datatype (`TotalCharges`)**: Loaded as a string (`object`) instead of numerical float due to trailing whitespace formatting.
+* **Missing Values at `tenure == 0`**: Exactly 11 records contained blank space strings (`" "`) in `TotalCharges`. All 11 corresponded to new accounts with zero tenure who had not yet been billed.
+* **Non-Predictive Identifier (`customerID`)**: Arbitrary alphanumeric string with no statistical value.
+* **Redundant Categorical Labels**: Features like `OnlineSecurity`, `TechSupport`, and `DeviceProtection` contained redundant `"No internet service"` categories that mirrored the `InternetService` column state.
 
 ---
 
-## 3. Preprocessing & Feature Engineering
+## 3. Major Preprocessing & Feature-Engineering Decisions
 
-### Preprocessing Pipeline
-* **Target Encoding**: Mapped target column `Churn` (`'Yes'` $\rightarrow$ 1, `'No'` $\rightarrow$ 0).
-* **Categorical Encoding**: Applied One-Hot Encoding to non-ordinal categorical variables (`Contract`, `PaymentMethod`, `InternetService`, etc.).
-* **Feature Scaling**: Scaled numerical features (`tenure`, `MonthlyCharges`, `TotalCharges`) using `StandardScaler` to normalize distributions for model training.
-* **Data Splitting**: Split data into 80% Training and 20% Testing sets using stratified sampling (`stratify=y`) to maintain the baseline churn class ratio (~26.5% positive class).
+### Preprocessing Steps
+* **Imputation & Parsing**: Converted `TotalCharges` to numeric (`pd.to_numeric`) and imputed the 11 zero-tenure missing values to `0.0`.
+* **Identifier Removal**: Dropped `customerID` prior to feature encoding.
+* **Target Encoding**: Mapped target variable `Churn` to binary (`Yes` -> 1, `No` -> 0).
+* **Categorical Encoding**: Applied One-Hot Encoding to multi-class non-ordinal variables (`Contract`, `PaymentMethod`, `InternetService`).
+* **Feature Scaling**: Normalized continuous variables using standard scaling methodologies.
+* **Data Splitting**: Executed an 80/20 train-test split using stratified sampling (`stratify=y`) to maintain baseline class balance across both subsets.
 
 ### Engineered Features (5 Created)
-To capture customer behavioral patterns and financial usage, five new domain-specific features were created:
+To capture customer lifecycle phases, financial velocity, and ecosystem lock-in, five domain features were engineered (including the 3 required core features):
 
 | # | Feature Name | Formula / Logic | Business Context |
 |---|---|---|---|
-| 1 | `Average_Monthly_Charge` | `TotalCharges / (tenure + 1)` | Captures historical monthly spending trend compared to the current `MonthlyCharges`. |
-| 2 | `Is_New_Customer` | `tenure <= 12` (Binary: 1/0) | Flags early-lifecycle customers who are statistically most vulnerable to churning. |
-| 3 | `Total_Services_Subscribed` | Sum of active add-on services | Quantifies customer reliance on the ecosystem (Security, Backup, Protection, Support, TV, Movies). |
-| 4 | `Has_Tech_or_Security` | `OnlineSecurity` OR `TechSupport` | Identifies presence of key retention-anchoring protection services. |
-| 5 | `Automatic_Payment` | Binary flag for auto-bank transfer or credit card | Distinguishes seamless auto-pay users from manual payers (e.g., electronic checks). |
+| 1 | `AvgMonthlySpend` | `df['TotalCharges'] / (df['tenure'] + 1)` | Measures overall historical monthly spend relative to active lifetime. |
+| 2 | `NewCustomer` | `(df['tenure'] < 12).astype(int)` | Flags high-vulnerability accounts during their first year of service. |
+| 3 | `LongTermCustomer` | `(df['tenure'] >= 24).astype(int)` | Identifies mature, established accounts with higher baseline loyalty. |
+| 4 | `Total_Services_Subscribed` | Sum of active add-on features | Quantifies product ecosystem depth and service stickiness. |
+| 5 | `Automatic_Payment` | Binary flag for auto-bank/credit card | Distinguishes seamless auto-payers from high-friction manual payment users. |
 
 ---
 
 ## 4. Model Results & Evaluation Metrics
+A baseline model was trained on the preprocessed training set and evaluated on the hold-out test set (1,409 instances). In churn modeling, capturing actual churning customers (**Recall**) is prioritized to ensure high-risk accounts receive intervention.
 
-A **Logistic Regression** (or Random Forest) baseline model was trained on the preprocessed training set and evaluated on the hold-out test set (20% of data).
+### Evaluation Metrics (Test Set)
+* **Accuracy**: 0.7473 (74.73%)
+* **Precision (Churn = 1)**: 0.52
+* **Recall (Churn = 1)**: 0.7888 (78.88%)
+* **F1-Score (Churn = 1)**: 0.6237 (62.37%)
 
-### Evaluation Metrics
-Given the business context of customer churn, **Recall** and **F1-Score** for the churn class ($y=1$) are prioritized over standard Accuracy to ensure high-risk customers are not missed.
-
-* **Accuracy**: `0.XX`
-* **Precision (Churn = 1)**: `0.XX`
-* **Recall (Churn = 1)**: `0.XX`
-* **F1-Score (Churn = 1)**: `0.XX`
-* **ROC-AUC Score**: `0.XX`
-
-### Confusion Matrix (Test Set)
+### Classification Report
 ```text
-               Predicted: No Churn    Predicted: Churn
-Actual: No     [     TN     ]        [     FP     ]
-Actual: Yes    [     FN     ]        [     TP     ]
+              precision    recall  f1-score   support
+
+           0       0.91      0.73      0.81      1035
+           1       0.52      0.79      0.62       374
+
+    accuracy                           0.75      1409
+   macro avg       0.71      0.76      0.72      1409
+weighted avg       0.80      0.75      0.76      1409
+
+
